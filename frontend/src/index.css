@@ -107,3 +107,8 @@ img {
 
   display: block;
 }
+
+html, body {
+  background: #0a1022;
+  margin: 0;
+}

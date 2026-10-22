@@ -22,3 +22,28 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+
+.DS_Store
+frontend-extra-backup/
+node_modules/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Uploads and generated files (if not required in the repository)
+
+
+
+# Dependencies
+node_modules/
+
+# Environment secrets
+.env
+.env.*
+!.env.example
+
+# Build output
+dist/

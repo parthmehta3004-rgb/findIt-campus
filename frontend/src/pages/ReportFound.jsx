@@ -1,293 +1,501 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import BrandLogo from "./components/BrandLogo";
 
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import BrandLogo from "./components/BrandLogo";
 import "./ReportFound.css";
+import Footer from './components/Footer';
+
+const API_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+const initialFormData = {
+  itemName: "",
+  category: "",
+  dateFound: "",
+  location: "",
+  description: "",
+  features: "",
+  contact: "",
+};
+
+const isValidContact = (value) => {
+  const contact = value.trim();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const indianMobileRegex = /^[6-9]\d{9}$/;
+
+  return (
+    emailRegex.test(contact) ||
+    indianMobileRegex.test(contact)
+  );
+};
 
 function ReportFound() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const fileInputRef = useRef(null);
+  const redirectTimer = useRef(null);
 
-  const [formData, setFormData] = useState({
-    itemName: "",
-    category: "",
-    dateFound: "",
-    location: "",
-    description: "",
-    features: "",
-    contact: "",
-    image: "",
-  });
+  const [formData, setFormData] = useState(initialFormData);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
+
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
 
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
-  // ================= HANDLE INPUT =================
+  // ---------------------------------------
+  // CHECK BACKEND LOGIN SESSION
+  // ---------------------------------------
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  useEffect(() => {
+    let cancelled = false;
 
-    setFormData((prevData) => ({
-      ...prevData,
+    async function checkSession() {
+      try {
+        const response = await fetch(
+          `${API_URL}/api/auth/me`,
+          {
+            method: "GET",
+            credentials: "include",
+          }
+        );
+
+        if (cancelled) return;
+
+        if (response.ok) {
+          setIsAuthenticated(true);
+          setShowLoginModal(false);
+          setError("");
+        } else if (
+          response.status === 401 ||
+          response.status === 403
+        ) {
+          setIsAuthenticated(false);
+          setShowLoginModal(true);
+        } else {
+          setIsAuthenticated(false);
+          setShowLoginModal(false);
+          setError(
+            "Unable to verify your login session. Please try again."
+          );
+        }
+      } catch (err) {
+        if (cancelled) return;
+
+        console.error("Session check failed:", err);
+        setIsAuthenticated(false);
+        setShowLoginModal(false);
+        setError(
+          "Backend se connection nahi ho raha. Server check karo."
+        );
+      } finally {
+        if (!cancelled) {
+          setCheckingAuth(false);
+        }
+      }
+    }
+
+    checkSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // ---------------------------------------
+  // CLEAN UP IMAGE PREVIEW AND TIMER
+  // ---------------------------------------
+
+  useEffect(() => {
+    return () => {
+      if (imagePreview) {
+        URL.revokeObjectURL(imagePreview);
+      }
+    };
+  }, [imagePreview]);
+
+  useEffect(() => {
+    return () => {
+      if (redirectTimer.current) {
+        clearTimeout(redirectTimer.current);
+      }
+    };
+  }, []);
+
+  // ---------------------------------------
+  // FORM INPUTS
+  // ---------------------------------------
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+
+    setFormData((previous) => ({
+      ...previous,
       [name]: value,
     }));
   };
 
-  // ================= HANDLE IMAGE =================
+  // ---------------------------------------
+  // IMAGE VALIDATION
+  // ---------------------------------------
 
-  const handleImageChange = (e) => {
-    const file = e.target.files?.[0];
+  const handleImageChange = (event) => {
+    const file = event.target.files?.[0];
+
+    setError("");
+    setImageFile(null);
+    setImagePreview("");
 
     if (!file) return;
 
-    const reader = new FileReader();
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+    ];
 
-    reader.onloadend = () => {
-      setFormData((prevData) => ({
-        ...prevData,
-        image: reader.result,
-      }));
-    };
+    if (!allowedTypes.includes(file.type)) {
+      setError(
+        "Only JPG, PNG and WEBP images are allowed."
+      );
+      event.target.value = "";
+      return;
+    }
 
-    reader.readAsDataURL(file);
+    if (file.size > 5 * 1024 * 1024) {
+      setError(
+        "Image size must be 5 MB or less."
+      );
+      event.target.value = "";
+      return;
+    }
+
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
   };
 
-  // ================= SUBMIT =================
+  // ---------------------------------------
+  // LOGIN / SIGNUP NAVIGATION
+  // ---------------------------------------
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const openLogin = () => {
+    navigate("/login", {
+      state: {
+        from: location,
+      },
+    });
+  };
 
-    const existingItems =
-      JSON.parse(localStorage.getItem("foundItems")) || [];
+  const openSignup = () => {
+    navigate("/signup", {
+      state: {
+        from: location,
+      },
+    });
+  };
 
-    const newItem = {
-      id: Date.now(),
+  // ---------------------------------------
+  // RECHECK AUTHENTICATION BEFORE SUBMIT
+  // ---------------------------------------
 
-      itemName: formData.itemName,
-      category: formData.category,
-      dateFound: formData.dateFound,
-      location: formData.location,
-      description: formData.description,
-      features: formData.features,
-      contact: formData.contact,
-      image: formData.image,
-
-      status: "Found",
-      createdAt: new Date().toISOString(),
-    };
-
-    localStorage.setItem(
-      "foundItems",
-      JSON.stringify([newItem, ...existingItems])
+  const verifySession = async () => {
+    const response = await fetch(
+      `${API_URL}/api/auth/me`,
+      {
+        method: "GET",
+        credentials: "include",
+      }
     );
 
-    setSubmitted(true);
+    if (response.ok) {
+      return true;
+    }
 
-    setFormData({
-      itemName: "",
-      category: "",
-      dateFound: "",
-      location: "",
-      description: "",
-      features: "",
-      contact: "",
-      image: "",
-    });
+    if (
+      response.status === 401 ||
+      response.status === 403
+    ) {
+      return false;
+    }
 
-    setTimeout(() => {
-      navigate("/found");
-    }, 1500);
+    throw new Error(
+      "Unable to verify login session."
+    );
   };
+
+  // ---------------------------------------
+  // SUBMIT FOUND ITEM
+  // ---------------------------------------
+
+  const handleSubmit = async (event) => {
+    event.preventDefault();
+
+    if (loading || checkingAuth) return;
+
+    setError("");
+    setSubmitted(false);
+
+    // Verify login before submitting.
+    try {
+      const authenticated = await verifySession();
+
+      if (!authenticated) {
+        setIsAuthenticated(false);
+        setShowLoginModal(true);
+        return;
+      }
+
+      setIsAuthenticated(true);
+      setShowLoginModal(false);
+    } catch (err) {
+      setError(
+        err.message ||
+          "Backend se connection nahi ho raha."
+      );
+      return;
+    }
+
+    if (!isValidContact(formData.contact)) {
+      setError(
+        "Enter a valid email address or a 10-digit Indian mobile number."
+      );
+      return;
+    }
+
+    const description = [
+      formData.description.trim(),
+      formData.features.trim()
+        ? `Distinguishing features: ${formData.features.trim()}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const payload = new FormData();
+
+    payload.append(
+      "item_name",
+      formData.itemName.trim()
+    );
+
+    payload.append(
+      "category",
+      formData.category
+    );
+
+    payload.append(
+      "date_found",
+      formData.dateFound
+    );
+
+    payload.append(
+      "location",
+      formData.location.trim()
+    );
+
+    payload.append(
+      "description",
+      description
+    );
+
+    payload.append(
+      "contact",
+      formData.contact.trim()
+    );
+
+    if (imageFile) {
+      payload.append("image", imageFile);
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/found-items`,
+        {
+          method: "POST",
+          credentials: "include",
+          body: payload,
+        }
+      );
+
+      const result = await response
+        .json()
+        .catch(() => ({}));
+
+      // Session expired or user logged out.
+      if (
+        response.status === 401 ||
+        response.status === 403
+      ) {
+        setIsAuthenticated(false);
+        setShowLoginModal(true);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          result.message ||
+            "Unable to save the found item."
+        );
+      }
+
+      setSubmitted(true);
+      setFormData(initialFormData);
+      setImageFile(null);
+      setImagePreview("");
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+
+      redirectTimer.current = setTimeout(() => {
+        navigate("/found");
+      }, 1000);
+    } catch (err) {
+      console.error(
+        "Found item submission failed:",
+        err
+      );
+
+      setError(
+        err.message ||
+          "Unable to connect to the backend."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // ---------------------------------------
+  // JSX
+  // ---------------------------------------
 
   return (
     <div className="reportfound-page">
-
-      {/* ================= BACKGROUND ================= */}
-
-      <div className="reportfound-circle reportfound-circle-one"></div>
-      <div className="reportfound-circle reportfound-circle-two"></div>
-
-
-      {/* ================= HEADER ================= */}
-
-      <header className="reportfound-header">
-
-        {/* CONSISTENT BRAND LOGO */}
-
-        <Link to="/" className="reportfound-brand">
-          <BrandLogo small={true} />
-        </Link>
-
-
-        {/* BACK BUTTON */}
-
-        <button
-          className="reportfound-back-button"
-          onClick={() => navigate(-1)}
-        >
-          ← Back
-        </button>
-
-      </header>
-
-
-      {/* ================= MAIN ================= */}
+      <div className="reportfound-circle reportfound-circle-one" />
+      <div className="reportfound-circle reportfound-circle-two" />
 
       <main className="reportfound-main">
-
-
-        {/* ================= LEFT SECTION ================= */}
-
+        {/* INTRO */}
         <section className="reportfound-intro-section">
-
           <div className="reportfound-search-icon-container">
             ✨
           </div>
 
-
           <div className="reportfound-intro-content">
-
             <div className="reportfound-small-label">
               FOUND SOMETHING?
             </div>
 
-
             <h2>
               Help Return
               <br />
-
               <span>Found Items</span>
             </h2>
 
-
             <p>
-              Report the item you found and help someone in the
-              campus community get their belongings back.
+              Report the item you found and help someone
+              in the campus community get their
+              belongings back.
             </p>
-
           </div>
 
-
-          {/* ================= TIPS ================= */}
-
           <div className="reportfound-tips">
-
-
             <div className="reportfound-tip">
-
               <div className="reportfound-tip-icon">
                 ✓
               </div>
 
               <div>
-
-                <h3>
-                  Be Specific
-                </h3>
-
+                <h3>Be Specific</h3>
                 <p>
-                  Add clear details to help identify the owner.
+                  Add clear details to help identify
+                  the owner.
                 </p>
-
               </div>
-
             </div>
 
-
             <div className="reportfound-tip">
-
               <div className="reportfound-tip-icon reportfound-cyan">
                 📍
               </div>
 
               <div>
-
-                <h3>
-                  Add Location
-                </h3>
-
+                <h3>Add Location</h3>
                 <p>
-                  Tell us exactly where you found the item.
+                  Tell us exactly where you found
+                  the item.
                 </p>
-
               </div>
-
             </div>
 
-
             <div className="reportfound-tip">
-
               <div className="reportfound-tip-icon reportfound-amber">
                 🤝
               </div>
 
               <div>
-
-                <h3>
-                  Help Someone
-                </h3>
-
+                <h3>Help Someone</h3>
                 <p>
-                  Your report could help reunite someone with their item.
+                  Your report could reunite someone
+                  with their item.
                 </p>
-
               </div>
-
             </div>
-
           </div>
-
         </section>
 
-
-        {/* ================= FORM ================= */}
-
+        {/* FORM */}
         <section className="reportfound-form-section">
-
           <div className="reportfound-form-card">
-
-
-            {/* FORM HEADING */}
-
             <div className="reportfound-form-heading">
-
-              <h2>
-                Report Found Item
-              </h2>
-
+              <h2>Report Found Item</h2>
               <p>
-                Provide the details below to create a found listing.
+                Provide the details below to create
+                a found listing.
               </p>
-
             </div>
 
-
-            {/* SUCCESS MESSAGE */}
-
-            {submitted && (
-
-              <div className="reportfound-success-message">
-                ✓ Found item listed successfully!
-              </div>
-
+            {checkingAuth && (
+              <p role="status">
+                Checking your login session...
+              </p>
             )}
 
+            {submitted && (
+              <div
+                className="reportfound-success-message"
+                role="status"
+              >
+                ✓ Found item saved successfully!
+              </div>
+            )}
+
+            {error && (
+              <div
+                className="reportfound-error-message"
+                role="alert"
+              >
+                {error}
+              </div>
+            )}
 
             <form
               className="reportfound-form"
               onSubmit={handleSubmit}
             >
-
-
-              {/* ================= ITEM NAME ================= */}
-
+              {/* ITEM NAME */}
               <div className="reportfound-input-group">
-
                 <label htmlFor="itemName">
                   Item Name
                 </label>
 
-
                 <div className="reportfound-input-wrapper">
-
                   <span className="reportfound-input-icon">
                     📦
                   </span>
@@ -299,29 +507,22 @@ function ReportFound() {
                     placeholder="e.g. Black Wallet"
                     value={formData.itemName}
                     onChange={handleChange}
+                    maxLength={150}
                     required
                   />
-
                 </div>
-
               </div>
 
-
-              {/* ================= CATEGORY ================= */}
-
+              {/* CATEGORY */}
               <div className="reportfound-input-group">
-
                 <label htmlFor="category">
                   Category
                 </label>
 
-
                 <div className="reportfound-input-wrapper">
-
                   <span className="reportfound-input-icon">
                     🏷️
                   </span>
-
 
                   <select
                     id="category"
@@ -330,64 +531,43 @@ function ReportFound() {
                     onChange={handleChange}
                     required
                   >
-
                     <option value="">
                       Select a category
                     </option>
-
                     <option value="Electronics">
                       Electronics
                     </option>
-
                     <option value="Wallet / Money">
                       Wallet / Money
                     </option>
-
                     <option value="ID / Documents">
                       ID / Documents
                     </option>
-
-                    <option value="Keys">
-                      Keys
-                    </option>
-
+                    <option value="Keys">Keys</option>
                     <option value="Clothing">
                       Clothing
                     </option>
-
                     <option value="Books / Stationery">
                       Books / Stationery
                     </option>
-
                     <option value="Accessories">
                       Accessories
                     </option>
-
                     <option value="Other">
                       Other
                     </option>
-
                   </select>
-
                 </div>
-
               </div>
 
-
-              {/* ================= DATE + LOCATION ================= */}
-
+              {/* DATE AND LOCATION */}
               <div className="reportfound-two-column">
-
-
                 <div className="reportfound-input-group">
-
                   <label htmlFor="dateFound">
                     Date Found
                   </label>
 
-
                   <div className="reportfound-input-wrapper">
-
                     <span className="reportfound-input-icon">
                       📅
                     </span>
@@ -398,23 +578,18 @@ function ReportFound() {
                       name="dateFound"
                       value={formData.dateFound}
                       onChange={handleChange}
+                      max={new Date().toLocaleDateString("en-CA")}
                       required
                     />
-
                   </div>
-
                 </div>
 
-
                 <div className="reportfound-input-group">
-
                   <label htmlFor="location">
                     Location Found
                   </label>
 
-
                   <div className="reportfound-input-wrapper">
-
                     <span className="reportfound-input-icon">
                       📍
                     </span>
@@ -426,20 +601,15 @@ function ReportFound() {
                       placeholder="e.g. Central Library"
                       value={formData.location}
                       onChange={handleChange}
+                      maxLength={255}
                       required
                     />
-
                   </div>
-
                 </div>
-
               </div>
 
-
-              {/* ================= DESCRIPTION ================= */}
-
+              {/* DESCRIPTION */}
               <div className="reportfound-input-group">
-
                 <label htmlFor="description">
                   Description
                 </label>
@@ -450,17 +620,13 @@ function ReportFound() {
                   placeholder="Describe the item..."
                   value={formData.description}
                   onChange={handleChange}
-                  rows="3"
+                  rows={3}
                   required
                 />
-
               </div>
 
-
-              {/* ================= FEATURES ================= */}
-
+              {/* FEATURES */}
               <div className="reportfound-input-group">
-
                 <label htmlFor="features">
                   Distinguishing Features
                 </label>
@@ -471,23 +637,17 @@ function ReportFound() {
                   placeholder="Color, brand, stickers, scratches, etc."
                   value={formData.features}
                   onChange={handleChange}
-                  rows="2"
+                  rows={2}
                 />
-
               </div>
 
-
-              {/* ================= CONTACT ================= */}
-
+              {/* CONTACT */}
               <div className="reportfound-input-group">
-
                 <label htmlFor="contact">
                   Contact Information
                 </label>
 
-
                 <div className="reportfound-input-wrapper">
-
                   <span className="reportfound-input-icon">
                     📞
                   </span>
@@ -496,35 +656,30 @@ function ReportFound() {
                     type="text"
                     id="contact"
                     name="contact"
-                    placeholder="Email or phone number"
+                    placeholder="Email or 10-digit mobile number"
                     value={formData.contact}
                     onChange={handleChange}
+                    maxLength={255}
                     required
                   />
-
                 </div>
-
               </div>
 
-
-              {/* ================= IMAGE ================= */}
-
+              {/* IMAGE UPLOAD */}
               <div className="reportfound-input-group">
-
                 <label htmlFor="image">
                   Item Image <span>(Optional)</span>
                 </label>
-
 
                 <label
                   htmlFor="image"
                   className="reportfound-upload-box"
                 >
-
                   <input
                     type="file"
                     id="image"
-                    accept="image/*"
+                    ref={fileInputRef}
+                    accept="image/jpeg,image/png,image/webp"
                     onChange={handleImageChange}
                   />
 
@@ -532,62 +687,106 @@ function ReportFound() {
                     ↑
                   </div>
 
-
                   <div>
-
                     <strong>
-                      {formData.image
+                      {imageFile
                         ? "Image selected ✓"
                         : "Upload an image"}
                     </strong>
 
                     <p>
-                      PNG, JPG or JPEG
+                      PNG, JPG or WEBP — max 5 MB
                     </p>
-
                   </div>
-
                 </label>
 
-
-                {formData.image && (
-
+                {imagePreview && (
                   <img
                     className="reportfound-preview"
-                    src={formData.image}
-                    alt="Preview"
+                    src={imagePreview}
+                    alt="Selected item preview"
                   />
-
                 )}
-
               </div>
 
-
-              {/* ================= SUBMIT ================= */}
-
+              {/* SUBMIT */}
               <button
                 type="submit"
                 className="reportfound-submit-button"
+                disabled={
+                  loading ||
+                  checkingAuth ||
+                  !isAuthenticated
+                }
               >
-
                 <span>
-                  List Found Item
+                  {checkingAuth
+                    ? "Checking login..."
+                    : loading
+                      ? "Saving..."
+                      : "List Found Item"}
                 </span>
-
-                <span>
-                  →
-                </span>
-
+                <span>→</span>
               </button>
-
             </form>
-
           </div>
-
         </section>
-
       </main>
 
+      {/* LOGIN REQUIRED MODAL */}
+      {showLoginModal && !checkingAuth && (
+        <div
+          className="reportfound-modal-overlay"
+          role="presentation"
+        >
+          <div
+            className="reportfound-login-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="found-login-title"
+          >
+            <button
+              type="button"
+              className="reportfound-modal-close"
+              aria-label="Close login dialog"
+              onClick={() => navigate("/")}
+            >
+              ×
+            </button>
+
+            <div className="reportfound-modal-icon">
+              🔐
+            </div>
+
+            <h2 id="found-login-title">
+              Login Required
+            </h2>
+
+            <p>
+              Please log in to report your found
+              item. After login, you can return
+              to this page.
+            </p>
+
+            <button
+              type="button"
+              className="reportfound-submit-button"
+              onClick={openLogin}
+            >
+              Login
+            </button>
+
+            <button
+              type="button"
+              className="reportfound-modal-signup"
+              onClick={openSignup}
+            >
+              Don&apos;t have an account? Sign up
+            </button>
+          </div>
+          
+        </div>
+      )}
     </div>
   );
 }

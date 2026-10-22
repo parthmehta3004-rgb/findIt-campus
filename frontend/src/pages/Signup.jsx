@@ -1,521 +1,282 @@
-import { useState } from "react";
+
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import "./Signup.css";
-import BrandLogo from "./components/BrandLogo";
+import { apiRequest } from "../utils/api";
+import "../styles/auth.css";
+
+const initialForm = {
+  full_name: "",
+  email: "",
+  username: "",
+  roll_number: "",
+  password: "",
+  confirmPassword: "",
+};
 
 function Signup() {
   const navigate = useNavigate();
 
-  // ================= STATES =================
-
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-
-  const [name, setName] = useState("");
-  const [username, setUsername] = useState("");
-  const [rollNumber, setRollNumber] = useState("");
-
-  const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-
-  const [terms, setTerms] = useState(false);
-
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
-
+  const [form, setForm] = useState(initialForm);
+  const [profileImage, setProfileImage] = useState(null);
+  const [preview, setPreview] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (!profileImage) {
+      setPreview("");
+      return;
+    }
 
-  // ================= SIGNUP FUNCTION =================
+    const objectUrl = URL.createObjectURL(profileImage);
+    setPreview(objectUrl);
 
-  const handleSignup = (event) => {
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [profileImage]);
+
+  function handleChange(event) {
+    const { name, value } = event.target;
+
+    setForm((previous) => ({
+      ...previous,
+      [name]: value,
+    }));
+  }
+
+  function handleImageChange(event) {
+    const file = event.target.files?.[0];
+
+    setError("");
+
+    if (!file) {
+      setProfileImage(null);
+      return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(file.type)) {
+      setError("Choose a JPG, PNG, or WEBP image.");
+      event.target.value = "";
+      setProfileImage(null);
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Profile image must be 5 MB or less.");
+      event.target.value = "";
+      setProfileImage(null);
+      return;
+    }
+
+    setProfileImage(file);
+  }
+
+  async function handleSubmit(event) {
     event.preventDefault();
+    setError("");
 
-    // Clear old messages
-    setMessage("");
-    setMessageType("");
+    const full_name = form.full_name.trim();
+    const email = form.email.trim().toLowerCase();
+    const username = form.username.trim();
+    const roll_number = form.roll_number.trim();
+    const password = form.password;
 
-    // Remove unnecessary spaces
-    const trimmedName = name.trim();
-    const trimmedUsername = username.trim();
-    const trimmedRollNumber = rollNumber.trim();
-
-
-    // ================= VALIDATION =================
+    if (full_name.length < 2 || full_name.length > 100) {
+      setError("Full name must be between 2 and 100 characters.");
+      return;
+    }
 
     if (
-      !trimmedName ||
-      !trimmedUsername ||
-      !trimmedRollNumber ||
-      !password ||
-      !confirmPassword
+      email.length > 150 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
     ) {
-      setMessage("Please fill in all required fields.");
-      setMessageType("error");
+      setError("Please enter a valid email address.");
       return;
     }
 
-
-    // Password match
-
-    if (password !== confirmPassword) {
-      setMessage("Passwords do not match.");
-      setMessageType("error");
+    if (username && (username.length < 3 || username.length > 20)) {
+      setError("Username must be between 3 and 20 characters.");
       return;
     }
 
-
-    // Password length
-
-    if (password.length < 6) {
-      setMessage("Password must be at least 6 characters.");
-      setMessageType("error");
+    if (username && !/^[a-zA-Z0-9_.]+$/.test(username)) {
+      setError("Username can contain letters, numbers, underscores and dots.");
       return;
     }
 
-
-    // Terms
-
-    if (!terms) {
-      setMessage("Please accept the Terms and Conditions.");
-      setMessageType("error");
+    if (roll_number.length > 30) {
+      setError("Roll number cannot exceed 30 characters.");
       return;
     }
 
-
-    // ================= CHECK EXISTING USER =================
-
-    const existingUser = localStorage.getItem("registeredUser");
-
-    if (existingUser) {
-      setMessage(
-        "Account already exists. Please login."
-      );
-
-      setMessageType("error");
-
+    if (password.length < 8 || password.length > 72) {
+      setError("Password must be between 8 and 72 characters.");
       return;
     }
 
+    if (!/[a-zA-Z]/.test(password) || !/[0-9]/.test(password)) {
+      setError("Password must contain at least one letter and one number.");
+      return;
+    }
 
-    // ================= LOADING =================
+    if (password !== form.confirmPassword) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    if (!profileImage) {
+      setError("Please select a profile photo.");
+      return;
+    }
 
     setLoading(true);
 
+    try {
+      const data = new FormData();
 
-    // ================= CREATE USER DATA =================
+      data.append("full_name", full_name);
+      data.append("email", email);
+      data.append("username", username);
+      data.append("roll_number", roll_number);
+      data.append("password", password);
+      data.append("profile_image", profileImage);
 
-    const userData = {
-      name: trimmedName,
-      username: trimmedUsername,
-      rollNumber: trimmedRollNumber,
-      password: password,
-    };
+      await apiRequest("/api/auth/signup", {
+        method: "POST",
+        body: data,
+      });
 
+      // Server-side session verify karo.
+      await apiRequest("/api/auth/me");
 
-    // ================= TEMPORARY SIGNUP =================
-
-    setTimeout(() => {
-
-      // Save registered user
-
-      localStorage.setItem(
-        "registeredUser",
-        JSON.stringify(userData)
-      );
-
-
+      navigate("/", { replace: true });
+    } catch (err) {
+      setError(err.message || "Unable to create your account.");
+    } finally {
       setLoading(false);
-
-
-      // Success message
-
-      setMessage(
-        "Account created successfully! Redirecting to login..."
-      );
-
-      setMessageType("success");
-
-
-      // Clear form
-
-      setName("");
-      setUsername("");
-      setRollNumber("");
-      setPassword("");
-      setConfirmPassword("");
-      setTerms(false);
-
-
-      // Redirect to Login
-
-      setTimeout(() => {
-        navigate("/login");
-      }, 1500);
-
-    }, 1000);
-  };
-
-
-  // ================= UNIVERSITY SIGNUP =================
-
-  const universitySignup = () => {
-    alert(
-      "University Single Sign-On will be added later."
-    );
-  };
-
-
-  // ================= JSX =================
+    }
+  }
 
   return (
-    <div className="signup-page">
+    <main className="auth-page">
+      <form
+        className="auth-form"
+        onSubmit={handleSubmit}
+        noValidate
+      >
+        <h1>Create Account</h1>
+        <p>Join the FindIt@Campus community.</p>
 
-      <div className="signup-container">
+        {error && (
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
 
-
-        {/* ================= HEADER ================= */}
-
-        <header className="signup-header">
-
-         <Link to="/login" className="brand">
-            <BrandLogo small />
-        </Link>
-
-
-          <Link
-            to="/login"
-            className="header-login-link"
-          >
-            Already have an account?
-          </Link>
-
-        </header>
-
-
-        {/* ================= MAIN ================= */}
-
-        <main className="signup-main">
-
-          <div className="signup-card">
-
-
-            {/* Decorative Circles */}
-
-            <div className="circle circle-top"></div>
-
-            <div className="circle circle-bottom"></div>
-
-
-            {/* ================= HEADING ================= */}
-
-            <div className="signup-heading">
-
-              <h2>Create Account</h2>
-
-              <p>
-                Join your campus lost & found community
-              </p>
-
-            </div>
-
-
-            {/* ================= MESSAGE ================= */}
-
-            {message && (
-
-              <div
-                className={`message ${messageType}`}
-              >
-                {message}
-              </div>
-
+        <div className="signup-photo-section">
+          <div className="signup-photo-preview">
+            {preview ? (
+              <img src={preview} alt="Profile preview" />
+            ) : (
+              <span aria-hidden="true">👤</span>
             )}
-
-
-            {/* ================= FORM ================= */}
-
-            <form
-              onSubmit={handleSignup}
-              className="signup-form"
-            >
-
-
-              {/* ================= FULL NAME ================= */}
-
-              <div className="form-group">
-
-                <label htmlFor="name">
-                  Full Name
-                </label>
-
-                <div className="input-wrapper">
-
-                  <span className="input-icon">
-                    👤
-                  </span>
-
-                  <input
-                    type="text"
-                    id="name"
-                    placeholder="Enter your full name"
-                    value={name}
-                    onChange={(e) =>
-                      setName(e.target.value)
-                    }
-                    required
-                  />
-
-                </div>
-
-              </div>
-
-
-              {/* ================= USERNAME ================= */}
-
-              <div className="form-group">
-
-                <label htmlFor="username">
-                  Username
-                </label>
-
-                <div className="input-wrapper">
-
-                  <span className="input-icon">
-                    👤
-                  </span>
-
-                  <input
-                    type="text"
-                    id="username"
-                    placeholder="Create a username"
-                    value={username}
-                    onChange={(e) =>
-                      setUsername(e.target.value)
-                    }
-                    required
-                  />
-
-                </div>
-
-              </div>
-
-
-              {/* ================= ROLL NUMBER ================= */}
-
-              <div className="form-group">
-
-                <label htmlFor="rollNumber">
-                  Roll Number
-                </label>
-
-                <div className="input-wrapper">
-
-                  <span className="input-icon">
-                    #
-                  </span>
-
-                  <input
-                    type="text"
-                    id="rollNumber"
-                    placeholder="Enter your roll number"
-                    value={rollNumber}
-                    onChange={(e) =>
-                      setRollNumber(e.target.value)
-                    }
-                    required
-                  />
-
-                </div>
-
-              </div>
-
-
-              {/* ================= PASSWORD ================= */}
-
-              <div className="form-group">
-
-                <label htmlFor="password">
-                  Password
-                </label>
-
-                <div className="input-wrapper">
-
-                  <span className="input-icon">
-                    🔒
-                  </span>
-
-                  <input
-                    type={
-                      showPassword
-                        ? "text"
-                        : "password"
-                    }
-                    id="password"
-                    placeholder="Create a password"
-                    value={password}
-                    onChange={(e) =>
-                      setPassword(e.target.value)
-                    }
-                    required
-                  />
-
-                  <button
-                    type="button"
-                    className="password-toggle"
-                    onClick={() =>
-                      setShowPassword(!showPassword)
-                    }
-                  >
-                    {showPassword ? "🙈" : "👁️"}
-                  </button>
-
-                </div>
-
-              </div>
-
-
-              {/* ================= CONFIRM PASSWORD ================= */}
-
-              <div className="form-group">
-
-                <label htmlFor="confirmPassword">
-                  Confirm Password
-                </label>
-
-                <div className="input-wrapper">
-
-                  <span className="input-icon">
-                    🔒
-                  </span>
-
-                  <input
-                    type={
-                      showConfirmPassword
-                        ? "text"
-                        : "password"
-                    }
-                    id="confirmPassword"
-                    placeholder="Confirm your password"
-                    value={confirmPassword}
-                    onChange={(e) =>
-                      setConfirmPassword(e.target.value)
-                    }
-                    required
-                  />
-
-                  <button
-                    type="button"
-                    className="password-toggle"
-                    onClick={() =>
-                      setShowConfirmPassword(
-                        !showConfirmPassword
-                      )
-                    }
-                  >
-                    {showConfirmPassword ? "🙈" : "👁️"}
-                  </button>
-
-                </div>
-
-              </div>
-
-
-              {/* ================= TERMS ================= */}
-
-              <label className="terms">
-
-                <input
-                  type="checkbox"
-                  checked={terms}
-                  onChange={(e) =>
-                    setTerms(e.target.checked)
-                  }
-                />
-
-                <span>
-
-                  I agree to the{" "}
-
-                  <a href="#">
-                    Terms of Service
-                  </a>
-
-                  {" "}and{" "}
-
-                  <a href="#">
-                    Privacy Policy
-                  </a>
-
-                  .
-
-                </span>
-
-              </label>
-
-
-              {/* ================= SUBMIT ================= */}
-
-              <button
-                type="submit"
-                disabled={loading}
-                className="signup-button"
-              >
-
-                {loading
-                  ? "Creating Account..."
-                  : "Create Account"}
-
-              </button>
-
-            </form>
-
-
-            {/* ================= DIVIDER ================= */}
-
-            <div className="divider">
-
-              <span></span>
-
-              <p>OR</p>
-
-              <span></span>
-
-            </div>
-
-
-            {/* ================= UNIVERSITY ACCOUNT ================= */}
-
-            <button
-              type="button"
-              onClick={universitySignup}
-              className="university-button"
-            >
-
-              🎓 Continue with University Account
-
-            </button>
-
-
-            {/* ================= LOGIN ================= */}
-
-            <p className="login-text">
-
-              Already have an account?{" "}
-
-              <Link to="/login">
-                Sign In
-              </Link>
-
-            </p>
-
           </div>
 
-        </main>
+          <label htmlFor="signup-profile-image">
+            Profile Photo *
+          </label>
 
-      </div>
+          <input
+            id="signup-profile-image"
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            onChange={handleImageChange}
+            required
+          />
 
-    </div>
+          <small>JPG, PNG or WEBP · Maximum 5 MB</small>
+        </div>
+
+        <label htmlFor="signup-name">Full name</label>
+        <input
+          id="signup-name"
+          name="full_name"
+          autoComplete="name"
+          value={form.full_name}
+          onChange={handleChange}
+          minLength={2}
+          maxLength={100}
+          required
+        />
+
+        <label htmlFor="signup-email">Email</label>
+        <input
+          id="signup-email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          value={form.email}
+          onChange={handleChange}
+          maxLength={150}
+          required
+        />
+
+        <label htmlFor="signup-username">Username (optional)</label>
+        <input
+          id="signup-username"
+          name="username"
+          autoComplete="username"
+          value={form.username}
+          onChange={handleChange}
+          minLength={3}
+          maxLength={20}
+          pattern="[a-zA-Z0-9_.]+"
+        />
+
+        <label htmlFor="signup-roll">Roll number (optional)</label>
+        <input
+          id="signup-roll"
+          name="roll_number"
+          value={form.roll_number}
+          onChange={handleChange}
+          maxLength={30}
+        />
+
+        <label htmlFor="signup-password">Password</label>
+        <input
+          id="signup-password"
+          name="password"
+          type="password"
+          autoComplete="new-password"
+          value={form.password}
+          onChange={handleChange}
+          minLength={8}
+          maxLength={72}
+          required
+        />
+
+        <label htmlFor="signup-confirm">Confirm password</label>
+        <input
+          id="signup-confirm"
+          name="confirmPassword"
+          type="password"
+          autoComplete="new-password"
+          value={form.confirmPassword}
+          onChange={handleChange}
+          maxLength={72}
+          required
+        />
+
+        <button type="submit" disabled={loading}>
+          {loading ? "Creating account..." : "Create Account"}
+        </button>
+
+        <p>
+          Already have an account? <Link to="/login">Log in</Link>
+        </p>
+      </form>
+    </main>
   );
 }
 

@@ -1,475 +1,162 @@
+
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import "./Login.css";
-import BrandLogo from "./components/BrandLogo";
+import {
+  Link,
+  useLocation,
+  useNavigate,
+} from "react-router-dom";
+import { apiRequest } from "../utils/api";
+import "../styles/auth.css";
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // ================= STATES =================
-
-  const [username, setUsername] = useState("");
-  const [rollNumber, setRollNumber] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-
-  const [remember, setRemember] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-
-  const [message, setMessage] = useState("");
-  const [messageType, setMessageType] = useState("");
-
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // ================= LOGIN FUNCTION =================
-
-  const handleLogin = (event) => {
+  async function handleSubmit(event) {
     event.preventDefault();
+    setError("");
 
-    // Clear old messages
-    setMessage("");
-    setMessageType("");
+    const normalizedEmail = email.trim().toLowerCase();
 
-    // Remove extra spaces
-    const trimmedUsername = username.trim();
-    const trimmedRollNumber = rollNumber.trim();
-
-    // ================= VALIDATION =================
-
-    if (!trimmedUsername || !trimmedRollNumber || !password.trim()) {
-      setMessage("Please fill in all fields.");
-      setMessageType("error");
-      return;
-    }
-
-    // ================= GET REGISTERED USER =================
-
-    const savedUser = localStorage.getItem("registeredUser");
-
-    // User has never signed up
-    if (!savedUser) {
-      setMessage("No account found. Please create an account first.");
-      setMessageType("error");
-      return;
-    }
-
-    const userData = JSON.parse(savedUser);
-
-    // ================= CHECK CREDENTIALS =================
-
+    // Validate email.
     if (
-      trimmedUsername !== userData.username ||
-      trimmedRollNumber !== userData.rollNumber ||
-      password !== userData.password
+      normalizedEmail.length > 150 ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)
     ) {
-      setMessage("Invalid username, roll number, or password.");
-      setMessageType("error");
+      setError("Please enter a valid email address.");
       return;
     }
 
-    // ================= LOADING =================
+    if (!password) {
+      setError("Please enter your password.");
+      return;
+    }
 
     setLoading(true);
 
-    setTimeout(() => {
-      // Login status save
-      localStorage.setItem("isLoggedIn", "true");
+    try {
+      // Login using the backend API.
+      const loginResult = await apiRequest("/api/auth/login", {
+        method: "POST",
+        body: JSON.stringify({
+          email: normalizedEmail,
+          password,
+        }),
+      });
 
-      // Current logged-in user
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          username: userData.username,
-          rollNumber: userData.rollNumber,
-          name: userData.name,
-        })
-      );
+      // Confirm that the server-side session is valid.
+      const session = await apiRequest("/api/auth/me");
 
-      // Remember Me
-      if (remember) {
-        localStorage.setItem("rememberUser", "true");
-      } else {
-        localStorage.removeItem("rememberUser");
+      if (!session?.user) {
+        throw new Error(
+          "Login succeeded, but the session could not be verified. Please try again."
+        );
       }
 
+      // Store user details for display only.
+      // The backend session remains the source of authentication.
+      localStorage.setItem(
+        "user",
+        JSON.stringify(session.user)
+      );
+      localStorage.setItem("isLoggedIn", "true");
+
+      // Return to the page the user originally wanted.
+      const from = location.state?.from;
+
+      const destination =
+        typeof from === "string"
+          ? from
+          : from?.pathname
+            ? `${from.pathname}${from.search || ""}${from.hash || ""}`
+            : "/";
+
+      navigate(destination, { replace: true });
+    } catch (err) {
+      console.error("Login error:", err);
+
+      setError(
+        err.message || "Unable to log in. Please try again."
+      );
+    } finally {
       setLoading(false);
-
-      setMessage("Login successful! Redirecting...");
-      setMessageType("success");
-
-      // Redirect to Home
-      setTimeout(() => {
-        navigate("/");
-      }, 1000);
-    }, 1000);
-  };
-
-  // ================= UNIVERSITY LOGIN =================
-
-  const universityLogin = () => {
-    alert(
-      "University Single Sign-On feature will be added later."
-    );
-  };
-
-  // ================= FORGOT PASSWORD =================
-
-  const handleForgotPassword = () => {
-    alert(
-      "Forgot Password feature will be added later."
-    );
-  };
-
-  // ================= JSX =================
+    }
+  }
 
   return (
-    <div className="login-page">
-
-      {/* ================= HEADER ================= */}
-
-      <header className="login-header">
-
-        <Link to="/" className="brand">
-
-          <BrandLogo small />
-
-        </Link>
-
-        <Link
-          to="/signup"
-          className="header-signup"
-        >
-          Create Account
-        </Link>
-
-      </header>
-
-
-      {/* ================= MAIN ================= */}
-
-      <main className="login-main">
-
-        {/* ================= LEFT HERO ================= */}
-
-        <section className="hero-section">
-
-          <div className="hero-content">
-
-            <h2>
-              Smart Campus
-              <br />
-              <span>Lost & Found</span>
-            </h2>
-
-            <p className="hero-description">
-              Find what's lost.
-              <br />
-              Return what's found.
-            </p>
-
-          </div>
-
-
-          {/* ================= FEATURES ================= */}
-
-          <div className="features">
-
-            <div className="feature">
-
-              <div className="feature-icon secure-icon">
-                ♢
-              </div>
-
-              <div>
-                <h3>Secure & Reliable</h3>
-
-                <p>
-                  Your data is safe with us.
-                </p>
-              </div>
-
-            </div>
-
-
-            <div className="feature">
-
-              <div className="feature-icon community-icon">
-                ♧
-              </div>
-
-              <div>
-                <h3>Community Driven</h3>
-
-                <p>
-                  Helping each other, every day.
-                </p>
-              </div>
-
-            </div>
-
-
-            <div className="feature">
-
-              <div className="feature-icon quick-icon">
-                ⚡
-              </div>
-
-              <div>
-                <h3>Quick & Easy</h3>
-
-                <p>
-                  Report, Search & Reclaim in minutes.
-                </p>
-              </div>
-
-            </div>
-
-          </div>
-
-        </section>
-
-
-        {/* ================= LOGIN SECTION ================= */}
-
-        <section className="login-section">
-
-          <div className="login-card">
-
-            {/* ================= HEADING ================= */}
-
-            <div className="login-heading">
-
-              <h2>Welcome Back</h2>
-
-              <p>
-                Login to your campus account
-              </p>
-
-            </div>
-
-
-            {/* ================= MESSAGE ================= */}
-
-            {message && (
-
-              <div
-                className={`login-message ${messageType}`}
-              >
-                {message}
-              </div>
-
-            )}
-
-
-            {/* ================= FORM ================= */}
-
-            <form onSubmit={handleLogin}>
-
-
-              {/* USERNAME */}
-
-              <div className="input-group">
-
-                <label htmlFor="username">
-                  Username
-                </label>
-
-                <div className="input-wrapper">
-
-                  <span className="input-icon">
-                    👤
-                  </span>
-
-                  <input
-                    type="text"
-                    id="username"
-                    placeholder="Enter your username"
-                    value={username}
-                    onChange={(e) =>
-                      setUsername(e.target.value)
-                    }
-                    required
-                  />
-
-                </div>
-
-              </div>
-
-
-              {/* ROLL NUMBER */}
-
-              <div className="input-group">
-
-                <label htmlFor="rollNumber">
-                  Roll Number
-                </label>
-
-                <div className="input-wrapper">
-
-                  <span className="input-icon">
-                    #
-                  </span>
-
-                  <input
-                    type="text"
-                    id="rollNumber"
-                    placeholder="Enter your roll number"
-                    value={rollNumber}
-                    onChange={(e) =>
-                      setRollNumber(e.target.value)
-                    }
-                    required
-                  />
-
-                </div>
-
-              </div>
-
-
-              {/* PASSWORD */}
-
-              <div className="input-group">
-
-                <label htmlFor="password">
-                  Password
-                </label>
-
-                <div className="input-wrapper">
-
-                  <span className="input-icon">
-                    🔒
-                  </span>
-
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    id="password"
-                    placeholder="Enter your password"
-                    value={password}
-                    onChange={(e) =>
-                      setPassword(e.target.value)
-                    }
-                    required
-                  />
-
-                  <button
-                    type="button"
-                    className="eye-button"
-                    onClick={() =>
-                      setShowPassword(!showPassword)
-                    }
-                    aria-label={
-                      showPassword
-                        ? "Hide password"
-                        : "Show password"
-                    }
-                  >
-                    {showPassword ? "🙈" : "👁"}
-                  </button>
-
-                </div>
-
-              </div>
-
-
-              {/* ================= OPTIONS ================= */}
-
-              <div className="login-options">
-
-                {/* REMEMBER ME */}
-
-                <label className="remember">
-
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(e) =>
-                      setRemember(e.target.checked)
-                    }
-                  />
-
-                  <span>
-                    Remember Me
-                  </span>
-
-                </label>
-
-
-                {/* FORGOT PASSWORD */}
-
-                <button
-                  type="button"
-                  className="forgot-password"
-                  onClick={handleForgotPassword}
-                >
-                  Forgot Password?
-                </button>
-
-              </div>
-
-
-              {/* ================= LOGIN BUTTON ================= */}
-
-              <button
-                type="submit"
-                className="login-button"
-                disabled={loading}
-              >
-
-                {loading
-                  ? "Signing In..."
-                  : "Sign In"}
-
-              </button>
-
-            </form>
-
-
-            {/* ================= DIVIDER ================= */}
-
-            <div className="divider">
-
-              <span></span>
-
-              <p>OR</p>
-
-              <span></span>
-
-            </div>
-
-
-            {/* ================= UNIVERSITY LOGIN ================= */}
-
-            <button
-              type="button"
-              className="university-button"
-              onClick={universityLogin}
-            >
-
-              <span>🎓</span>
-
-              Continue with University Account
-
-            </button>
-
-
-            {/* ================= SIGNUP ================= */}
-
-            <p className="signup-text">
-
-              Don't have an account?{" "}
-
-              <Link to="/signup">
-                Sign Up
-              </Link>
-
-            </p>
-
-          </div>
-
-        </section>
-
-      </main>
-
-    </div>
+    <main className="auth-page">
+      <form
+        className="auth-form"
+        onSubmit={handleSubmit}
+        noValidate
+      >
+        <h1>Welcome Back</h1>
+
+        <p>Log in to your FindIt@Campus account.</p>
+
+        {error && (
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
+
+        <label htmlFor="login-email">
+          Email
+        </label>
+
+        <input
+          id="login-email"
+          type="email"
+          autoComplete="email"
+          placeholder="Enter your email"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+          maxLength={150}
+          required
+        />
+
+        <label htmlFor="login-password">
+          Password
+        </label>
+
+        <input
+          id="login-password"
+          type="password"
+          autoComplete="current-password"
+          placeholder="Enter your password"
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          maxLength={72}
+          required
+        />
+
+        <button type="submit" disabled={loading}>
+          {loading ? "Logging in..." : "Log In"}
+        </button>
+
+        <p>
+          Don&apos;t have an account?{" "}
+          <Link
+            to="/signup"
+            state={{ from: location.state?.from || "/" }}
+            style={{textDecoration:"none"}}
+          >
+            Sign up
+          </Link>
+        </p>
+
+        <p>
+          <Link to="/" style={{textDecoration:"none"}} >
+            ← Back to Home
+          </Link>
+        </p>
+      </form>
+    </main>
   );
 }
 

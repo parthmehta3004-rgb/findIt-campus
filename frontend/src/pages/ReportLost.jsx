@@ -1,161 +1,205 @@
-import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import BrandLogo from "./components/BrandLogo";
 import "./ReportLost.css";
 
+const API_URL = import.meta.env.VITE_API_URL || "http://localhost:3000";
+
+const initialFormData = {
+  itemName: "",
+  category: "",
+  dateLost: "",
+  location: "",
+  description: "",
+  features: "",
+  contact: "",
+};
+
 function ReportLost() {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [formData, setFormData] = useState({
-    itemName: "",
-    category: "",
-    dateLost: "",
-    location: "",
-    description: "",
-    features: "",
-    contact: "",
-    image: "",
-  });
-
+  const [formData, setFormData] = useState(initialFormData);
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState("");
+  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [error, setError] = useState("");
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
+  const checkSession = async () => {
+    const response = await fetch(`${API_URL}/api/auth/me`, {
+      credentials: "include",
+    });
 
-    setFormData((prevData) => ({
-      ...prevData,
-      [name]: value,
-    }));
+    const result = await response.json().catch(() => ({}));
+
+    if (response.ok) {
+      return true;
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      return false;
+    }
+
+    throw new Error(result.message || "Unable to verify login session.");
   };
 
-  const handleImageChange = (e) => {
-    const file = e.target.files?.[0];
+  useEffect(() => {
+    let cancelled = false;
+
+    async function initialize() {
+      try {
+        const authenticated = await checkSession();
+
+        if (cancelled) return;
+
+        setIsAuthenticated(authenticated);
+        setShowLoginModal(!authenticated);
+      } catch (err) {
+        if (!cancelled) {
+          setError("Backend se connection nahi ho raha. Server check karo.");
+          setShowLoginModal(false);
+        }
+      } finally {
+        if (!cancelled) setCheckingAuth(false);
+      }
+    }
+
+    initialize();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleChange = (event) => {
+    const { name, value } = event.target;
+    setFormData((previous) => ({ ...previous, [name]: value }));
+  };
+
+  const handleImageChange = (event) => {
+    const file = event.target.files?.[0];
+
+    setError("");
+    setImageFile(null);
+    setImagePreview("");
 
     if (!file) return;
 
-    const reader = new FileReader();
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setError("Only JPG, PNG and WEBP images are allowed.");
+      event.target.value = "";
+      return;
+    }
 
-    reader.onloadend = () => {
-      setFormData((prevData) => ({
-        ...prevData,
-        image: reader.result,
-      }));
-    };
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image size must be 5 MB or less.");
+      event.target.value = "";
+      return;
+    }
 
-    reader.readAsDataURL(file);
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
   };
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
+  const openLogin = () => {
+    navigate("/login", { state: { from: location } });
+  };
 
-    const existingItems =
-      JSON.parse(localStorage.getItem("lostItems")) || [];
+  const openSignup = () => {
+    navigate("/signup", { state: { from: location } });
+  };
 
-    const newItem = {
-      id: Date.now(),
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-      itemName: formData.itemName,
-      category: formData.category,
-      dateLost: formData.dateLost,
-      location: formData.location,
-      description: formData.description,
-      features: formData.features,
-      contact: formData.contact,
-      image: formData.image,
+    if (submitting || checkingAuth) return;
 
-      status: "Lost",
-      createdAt: new Date().toISOString(),
-    };
+    setError("");
+    setSubmitted(false);
 
-    localStorage.setItem(
-      "lostItems",
-      JSON.stringify([newItem, ...existingItems])
-    );
+    try {
+      const authenticated = await checkSession();
 
-    setSubmitted(true);
+      if (!authenticated) {
+        setIsAuthenticated(false);
+        setShowLoginModal(true);
+        return;
+      }
 
-    setFormData({
-      itemName: "",
-      category: "",
-      dateLost: "",
-      location: "",
-      description: "",
-      features: "",
-      contact: "",
-      image: "",
-    });
+      setIsAuthenticated(true);
+      setShowLoginModal(false);
+    } catch {
+      setError("Backend se connection nahi ho raha. Please try again.");
+      return;
+    }
 
-    setTimeout(() => {
-      navigate("/lost");
-    }, 1200);
+    setSubmitting(true);
+
+    try {
+      const payload = new FormData();
+
+      const description = [
+        formData.description.trim(),
+        formData.features.trim()
+          ? `Distinguishing features: ${formData.features.trim()}`
+          : "",
+      ].filter(Boolean).join("\n\n");
+
+      payload.append("item_name", formData.itemName.trim());
+      payload.append("category", formData.category);
+      payload.append("date_lost", formData.dateLost);
+      payload.append("location", formData.location.trim());
+      payload.append("description", description);
+      payload.append("contact", formData.contact.trim());
+
+      if (imageFile) payload.append("image", imageFile);
+
+      const response = await fetch(`${API_URL}/api/lost-items`, {
+        method: "POST",
+        credentials: "include",
+        body: payload,
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (response.status === 401 || response.status === 403) {
+        setIsAuthenticated(false);
+        setShowLoginModal(true);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(result.message || "Failed to save lost item.");
+      }
+
+      setSubmitted(true);
+      setFormData(initialFormData);
+      setImageFile(null);
+      setImagePreview("");
+
+      const input = document.getElementById("lost-image");
+      if (input) input.value = "";
+
+      window.setTimeout(() => navigate("/lost"), 1000);
+    } catch (err) {
+      setError(err.message || "Unable to submit the lost item.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <div className="reportlost-page">
 
-      {/* ================= HEADER ================= */}
-
-      <header className="reportlost-header">
-
-        {/* CONSISTENT BRAND LOGO */}
-        <Link to="/" className="reportlost-brand">
-          <BrandLogo small />
-        </Link>
-
-
-        {/* NAVIGATION */}
-
-        <nav className="reportlost-nav-links">
-
-          <Link to="/">Home</Link>
-
-          <Link to="/lost">Lost</Link>
-
-          <Link to="/report-lost" className="active">
-            Report Lost
-          </Link>
-
-          <Link to="/found">Found</Link>
-
-          <Link to="/report-found">
-            Report Found
-          </Link>
-
-          <Link to="/profile">
-            Profile
-          </Link>
-
-        </nav>
-
-
-        {/* BACK BUTTON */}
-
-        <button
-          className="reportlost-back-button"
-          onClick={() => navigate("/lost")}
-        >
-          ← Back
-        </button>
-
-      </header>
-
-
-      {/* ================= MAIN ================= */}
-
       <main className="reportlost-main">
-
-
-        {/* ================= LEFT SIDE ================= */}
-
         <section className="reportlost-intro-section">
-
-          <div className="reportlost-search-icon-container">
-            🔍
-          </div>
-
-          <span className="reportlost-small-label">
-            LOST SOMETHING?
-          </span>
+          <div className="reportlost-search-icon-container">🔍</div>
+          <span className="reportlost-small-label">LOST SOMETHING?</span>
 
           <h2>
             List Your
@@ -164,142 +208,83 @@ function ReportLost() {
           </h2>
 
           <p className="reportlost-intro-description">
-            Tell us about the item you lost and help the campus
-            community get it back to you.
+            Tell us about the item you lost and help the campus community
+            get it back to you.
           </p>
 
-
-          {/* TIPS */}
-
           <div className="reportlost-tips">
-
             <div className="reportlost-tip">
-
-              <div className="reportlost-tip-icon">
-                ✓
-              </div>
-
+              <div className="reportlost-tip-icon">✓</div>
               <div>
                 <h3>Be Specific</h3>
-
-                <p>
-                  Add details that make your item easy to identify.
-                </p>
+                <p>Add details that make your item easy to identify.</p>
               </div>
-
             </div>
 
-
             <div className="reportlost-tip">
-
-              <div className="reportlost-tip-icon">
-                📍
-              </div>
-
+              <div className="reportlost-tip-icon">📍</div>
               <div>
                 <h3>Add Location</h3>
-
-                <p>
-                  Mention where you last remember having it.
-                </p>
+                <p>Mention where you last remember having it.</p>
               </div>
-
             </div>
-
 
             <div className="reportlost-tip">
-
-              <div className="reportlost-tip-icon">
-                ⚡
-              </div>
-
+              <div className="reportlost-tip-icon">⚡</div>
               <div>
                 <h3>Act Quickly</h3>
-
-                <p>
-                  The sooner you report it, the better.
-                </p>
+                <p>The sooner you report it, the better.</p>
               </div>
-
             </div>
-
           </div>
-
         </section>
 
-
-        {/* ================= FORM ================= */}
-
         <section className="reportlost-form-section">
-
           <div className="reportlost-form-card">
-
             <div className="reportlost-form-heading">
-
               <h2>Report Lost Item</h2>
-
-              <p>
-                Provide the details below to create your listing.
-              </p>
-
+              <p>Provide the details below to create your listing.</p>
             </div>
 
+            {checkingAuth && (
+              <p className="reportlost-auth-loading" role="status">
+                Checking your login session...
+              </p>
+            )}
 
             {submitted && (
-              <div className="reportlost-success-message">
-                ✓ Lost item listed successfully!
+              <div className="reportlost-success-message" role="status">
+                ✓ Lost item saved successfully!
               </div>
             )}
 
+            {error && (
+              <div className="reportlost-error-message" role="alert">
+                {error}
+              </div>
+            )}
 
-            <form
-              className="reportlost-form"
-              onSubmit={handleSubmit}
-            >
-
-              {/* ITEM NAME */}
-
+            <form className="reportlost-form" onSubmit={handleSubmit}>
               <div className="reportlost-input-group">
-
-                <label htmlFor="itemName">
-                  Item Name
-                </label>
-
+                <label htmlFor="itemName">Item Name</label>
                 <div className="reportlost-input-wrapper">
-
-                  <span className="reportlost-input-icon">
-                    📦
-                  </span>
-
+                  <span className="reportlost-input-icon">📦</span>
                   <input
-                    type="text"
                     id="itemName"
                     name="itemName"
-                    placeholder="e.g. Black Wallet"
                     value={formData.itemName}
                     onChange={handleChange}
+                    placeholder="e.g. Black Wallet"
+                    maxLength={150}
                     required
                   />
-
                 </div>
-
               </div>
 
-
-              {/* CATEGORY */}
-
               <div className="reportlost-input-group">
-
-                <label htmlFor="category">
-                  Category
-                </label>
-
+                <label htmlFor="category">Category</label>
                 <div className="reportlost-input-wrapper">
-
-                  <span className="reportlost-input-icon">
-                    🏷️
-                  </span>
-
+                  <span className="reportlost-input-icon">🏷️</span>
                   <select
                     id="category"
                     name="category"
@@ -307,248 +292,173 @@ function ReportLost() {
                     onChange={handleChange}
                     required
                   >
-
-                    <option value="">
-                      Select a category
-                    </option>
-
-                    <option value="Electronics">
-                      Electronics
-                    </option>
-
-                    <option value="Wallet / Money">
-                      Wallet / Money
-                    </option>
-
-                    <option value="ID / Documents">
-                      ID / Documents
-                    </option>
-
-                    <option value="Keys">
-                      Keys
-                    </option>
-
-                    <option value="Clothing">
-                      Clothing
-                    </option>
-
-                    <option value="Books / Stationery">
-                      Books / Stationery
-                    </option>
-
-                    <option value="Accessories">
-                      Accessories
-                    </option>
-
-                    <option value="Other">
-                      Other
-                    </option>
-
+                    <option value="">Select a category</option>
+                    <option>Electronics</option>
+                    <option>Wallet / Money</option>
+                    <option>ID / Documents</option>
+                    <option>Keys</option>
+                    <option>Clothing</option>
+                    <option>Books / Stationery</option>
+                    <option>Accessories</option>
+                    <option>Other</option>
                   </select>
-
                 </div>
-
               </div>
-
-
-              {/* DATE + LOCATION */}
 
               <div className="reportlost-two-column">
-
                 <div className="reportlost-input-group">
-
-                  <label htmlFor="dateLost">
-                    Date Lost
-                  </label>
-
-                  <div className="reportlost-input-wrapper">
-
-                    <span className="reportlost-input-icon">
-                      📅
-                    </span>
-
-                    <input
-                      type="date"
-                      id="dateLost"
-                      name="dateLost"
-                      value={formData.dateLost}
-                      onChange={handleChange}
-                      required
-                    />
-
-                  </div>
-
+                  <label htmlFor="dateLost">Date Lost</label>
+                  <input
+                    id="dateLost"
+                    name="dateLost"
+                    type="date"
+                    value={formData.dateLost}
+                    onChange={handleChange}
+                    max={new Date().toLocaleDateString("en-CA")}
+                    required
+                  />
                 </div>
 
-
                 <div className="reportlost-input-group">
-
-                  <label htmlFor="location">
-                    Location Lost
-                  </label>
-
-                  <div className="reportlost-input-wrapper">
-
-                    <span className="reportlost-input-icon">
-                      📍
-                    </span>
-
-                    <input
-                      type="text"
-                      id="location"
-                      name="location"
-                      placeholder="e.g. Central Library"
-                      value={formData.location}
-                      onChange={handleChange}
-                      required
-                    />
-
-                  </div>
-
+                  <label htmlFor="location">Location Lost</label>
+                  <input
+                    id="location"
+                    name="location"
+                    value={formData.location}
+                    onChange={handleChange}
+                    placeholder="e.g. Central Library"
+                    maxLength={255}
+                    required
+                  />
                 </div>
-
               </div>
 
-
-              {/* DESCRIPTION */}
-
               <div className="reportlost-input-group">
-
-                <label htmlFor="description">
-                  Description
-                </label>
-
+                <label htmlFor="description">Description</label>
                 <textarea
                   id="description"
                   name="description"
-                  placeholder="Describe the item..."
                   value={formData.description}
                   onChange={handleChange}
-                  rows="3"
+                  placeholder="Describe the item..."
+                  rows={3}
                   required
                 />
-
               </div>
 
-
-              {/* FEATURES */}
-
               <div className="reportlost-input-group">
-
-                <label htmlFor="features">
-                  Distinguishing Features
-                </label>
-
+                <label htmlFor="features">Distinguishing Features</label>
                 <textarea
                   id="features"
                   name="features"
-                  placeholder="Color, brand, stickers, scratches, etc."
                   value={formData.features}
                   onChange={handleChange}
-                  rows="2"
+                  placeholder="Color, brand, stickers, scratches..."
+                  rows={2}
                 />
-
               </div>
 
-
-              {/* CONTACT */}
-
               <div className="reportlost-input-group">
-
-                <label htmlFor="contact">
-                  Contact Information
-                </label>
-
-                <div className="reportlost-input-wrapper">
-
-                  <span className="reportlost-input-icon">
-                    📞
-                  </span>
-
-                  <input
-                    type="text"
-                    id="contact"
-                    name="contact"
-                    placeholder="Email or phone number"
-                    value={formData.contact}
-                    onChange={handleChange}
-                    required
-                  />
-
-                </div>
-
+                <label htmlFor="contact">Contact Information</label>
+                <input
+                  id="contact"
+                  name="contact"
+                  value={formData.contact}
+                  onChange={handleChange}
+                  placeholder="Email or phone number"
+                  maxLength={255}
+                  required
+                />
               </div>
 
-
-              {/* IMAGE */}
-
               <div className="reportlost-input-group">
-
-                <label>
+                <label htmlFor="lost-image">
                   Item Image <span>(Optional)</span>
                 </label>
 
-                <label
-                  htmlFor="image"
-                  className="reportlost-upload-box"
-                >
-
+                <label htmlFor="lost-image" className="reportlost-upload-box">
                   <input
+                    id="lost-image"
                     type="file"
-                    id="image"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     onChange={handleImageChange}
                   />
-
-                  <div className="reportlost-upload-icon">
-                    ↑
-                  </div>
-
+                  <div className="reportlost-upload-icon">↑</div>
                   <div>
-
                     <strong>
-                      {formData.image
-                        ? "Image selected ✓"
-                        : "Upload an image"}
+                      {imageFile ? "Image selected ✓" : "Upload an image"}
                     </strong>
-
-                    <p>PNG, JPG or JPEG</p>
-
+                    <p>PNG, JPG or WEBP — max 5 MB</p>
                   </div>
-
                 </label>
 
-
-                {formData.image && (
-
+                {imagePreview && (
                   <img
                     className="reportlost-preview"
-                    src={formData.image}
-                    alt="Preview"
+                    src={imagePreview}
+                    alt="Selected lost item"
                   />
-
                 )}
-
               </div>
-
-
-              {/* SUBMIT */}
 
               <button
                 type="submit"
                 className="reportlost-submit-button"
+                disabled={submitting || checkingAuth || !isAuthenticated}
               >
-                List Lost Item →
+                {checkingAuth
+                  ? "Checking login..."
+                  : submitting
+                    ? "Saving..."
+                    : "List Lost Item →"}
               </button>
-
             </form>
-
           </div>
-
         </section>
-
       </main>
 
+      {showLoginModal && !checkingAuth && (
+        <div className="reportlost-modal-overlay" role="presentation">
+          <div
+            className="reportlost-login-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="reportlost-modal-title"
+          >
+            <button
+              type="button"
+              className="reportlost-modal-close"
+              aria-label="Close login dialog"
+              onClick={() => navigate("/")}
+            >
+              ×
+            </button>
+
+            <div className="reportlost-modal-icon">🔐</div>
+            <h2 id="reportlost-modal-title">Login Required</h2>
+            <p>
+              Please log in to report your lost item. After login, you can
+              return to this page.
+            </p>
+
+            <button
+              type="button"
+              className="reportlost-submit-button"
+              onClick={openLogin}
+            >
+              Login
+            </button>
+
+            <button
+              type="button"
+              className="reportlost-modal-signup"
+              onClick={openSignup}
+            >
+              Don&apos;t have an account? Sign up
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1012,3 +1012,98 @@
   }
 
 }
+
+.profile-photo-editor {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 24px;
+}
+
+.profile-avatar {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid #60a5fa;
+  background: #e5e7eb;
+}
+
+.profile-avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 48px;
+}
+
+.profile-photo-editor input[type="file"] {
+  max-width: 100%;
+}
+
+.profile-photo-editor small {
+  display: block;
+  margin-top: 8px;
+}
+
+.profile-buttons,
+.profile-edit-button,
+.profile-save-button,
+.profile-cancel-button {
+  position: relative;
+  z-index: 10;
+  pointer-events: auto;
+}
+
+.profile-edit-button {
+  cursor: pointer;
+}
+
+.profile-circle {
+  pointer-events: none;
+  z-index: 0;
+}
+
+.profile-header,
+.profile-main-container {
+  position: relative;
+  z-index: 1;
+}
+
+
+/* Edit mode: keep the same dark theme as profile view */
+.profile-input-group input.is-editing {
+  background: rgba(20, 33, 51, 0.95);
+  color: #e2e8f0;
+  border: 1px solid rgba(96, 165, 250, 0.6);
+  cursor: text;
+  outline: none;
+  box-shadow: none;
+}
+
+/* Placeholder text */
+.profile-input-group input.is-editing::placeholder {
+  color: #94a3b8;
+  opacity: 1;
+}
+
+/* Focused input */
+.profile-input-group input.is-editing:focus {
+  background: rgba(20, 33, 51, 0.98);
+  color: #f1f5f9;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.12);
+}
+
+/* Read-only email should also remain dark */
+.profile-input-group input:read-only {
+  background: rgba(15, 27, 43, 0.75);
+  color: #94a3b8;
+  border-color: rgba(148, 163, 184, 0.14);
+  cursor: default;
+}
+
+
+.profile-input-group input[readonly] {
+  cursor: default;
+}

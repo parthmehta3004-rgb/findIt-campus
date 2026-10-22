@@ -1391,3 +1391,69 @@
   }
 
 }
+
+
+/* AI Match Results */
+.ai-match-results {
+  margin-top: 14px;
+  padding: 14px;
+  border: 1px solid #315783;
+  border-radius: 12px;
+  background: rgba(10, 24, 43, 0.75);
+  color: #e7eef9;
+  overflow-wrap: anywhere;
+}
+
+.ai-match-results h4 {
+  margin: 0 0 12px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #9bcaff;
+}
+
+.ai-match-card {
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid #29486c;
+  border-radius: 9px;
+  background: #1b2d43;
+}
+
+.ai-match-card:last-child {
+  margin-bottom: 0;
+}
+
+.ai-match-card h5 {
+  margin: 0 0 10px;
+  font-size: 15px;
+  color: #ffffff;
+}
+
+.ai-match-card p {
+  margin: 7px 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #d1dced;
+}
+
+.ai-match-card small {
+  display: block;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid #36506b;
+  color: #a9c6e7;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.ai-match-results > p,
+.lost-card-content p[role="alert"] {
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.lost-card-content button:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}

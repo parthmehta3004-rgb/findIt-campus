@@ -1075,3 +1075,69 @@
   }
 
 }
+
+.reportlost-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(3, 10, 22, 0.78);
+  backdrop-filter: blur(6px);
+}
+
+.reportlost-login-modal {
+  position: relative;
+  width: 100%;
+  max-width: 420px;
+  padding: 36px 28px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  border-radius: 20px;
+  background: #17263a;
+  color: #f1f5f9;
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.4);
+}
+
+.reportlost-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  border: 0;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 28px;
+  cursor: pointer;
+}
+
+.reportlost-modal-icon {
+  margin-bottom: 14px;
+  font-size: 42px;
+}
+
+.reportlost-login-modal h2 {
+  margin: 0 0 12px;
+  font-size: 26px;
+}
+
+.reportlost-login-modal p {
+  margin: 0 0 24px;
+  color: #b7c4d6;
+  line-height: 1.6;
+}
+
+.reportlost-login-modal .reportlost-submit-button {
+  width: 100%;
+}
+
+.reportlost-modal-signup {
+  margin-top: 14px;
+  padding: 8px;
+  border: 0;
+  background: transparent;
+  color: #75b7ff;
+  font-weight: 600;
+  cursor: pointer;
+}

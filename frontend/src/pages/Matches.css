@@ -335,6 +335,7 @@
   margin: 0 auto;
 
   padding: 3.5rem 0 4rem;
+  /* padding-to:48px; */
 }
 
 
@@ -1220,9 +1221,6 @@
   }
 
 
-  .matches-brand {
-    min-width: auto;
-  }
 
 
   .matches-brand-name p {
@@ -1342,4 +1340,97 @@
     padding: 1rem;
   }
 
+}
+
+.claim-item-btn {
+  padding: 12px 20px;
+  margin-top: 16px;
+  border: none;
+  border-radius: 9px;
+  background: #3985f6;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.claim-item-btn:hover {
+  background: #2563eb;
+}
+
+.claim-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.claim-modal {
+  position: relative;
+  width: 100%;
+  max-width: 500px;
+  padding: 28px;
+  border: 1px solid #344761;
+  border-radius: 16px;
+  background: #142338;
+  color: #f1f5f9;
+}
+
+.claim-modal-close {
+  position: absolute;
+  top: 12px;
+  right: 16px;
+  border: none;
+  background: transparent;
+  color: #fff;
+  font-size: 28px;
+  cursor: pointer;
+}
+
+.claim-modal form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.claim-modal textarea {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  border: 1px solid #405570;
+  border-radius: 8px;
+  background: #0b1728;
+  color: #fff;
+  font: inherit;
+  resize: vertical;
+}
+
+.claim-message {
+  margin-top: 14px;
+  color: #93c5fd;
+}
+
+
+.claim-success-message {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 20px 0;
+  padding: 16px 20px;
+  border: 1px solid #237b57;
+  border-radius: 12px;
+  background: #103528;
+  color: #b7f7d8;
+}
+
+.claim-success-message button {
+  margin-left: auto;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-size: 22px;
+  cursor: pointer;
 }
